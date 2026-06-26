@@ -24,6 +24,7 @@ class ArucoLandingFragment : DJIFragment() {
     private lateinit var statusText: TextView
     private lateinit var guidanceText: TextView
     private lateinit var autoAlignButton: Button
+    private lateinit var autoLandButton: Button
     private var surface: Surface? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -37,6 +38,7 @@ class ArucoLandingFragment : DJIFragment() {
         statusText = view.findViewById(R.id.tv_status)
         guidanceText = view.findViewById(R.id.tv_guidance)
         autoAlignButton = view.findViewById(R.id.btn_auto_align)
+        autoLandButton = view.findViewById(R.id.btn_auto_land)
         view.findViewById<Button>(R.id.btn_gimbal_down).setOnClickListener {
             viewModel.lookDownGimbal()
             ToastUtils.showToast("Sending gimbal look-down command.")
@@ -49,17 +51,19 @@ class ArucoLandingFragment : DJIFragment() {
             viewModel.startAutoAlign()
             ToastUtils.showToast("Auto align requested. Be ready to press STOP or use RC sticks.")
         }
+        autoLandButton.setOnClickListener {
+            viewModel.startAutoLand()
+            ToastUtils.showToast("Auto land requested. Be ready to press STOP or use RC sticks.")
+        }
         view.findViewById<Button>(R.id.btn_stop_detection).setOnClickListener {
-            viewModel.stopAutoAlign()
-            viewModel.stopDetection()
+            viewModel.stopAll()
         }
         cameraSurfaceView.holder.addCallback(surfaceCallback)
         initObservers()
     }
 
     override fun onDestroyView() {
-        viewModel.stopAutoAlign()
-        viewModel.stopDetection()
+        viewModel.stopAll()
         surface?.let { viewModel.removeCameraStreamSurface(it) }
         surface = null
         super.onDestroyView()
@@ -84,6 +88,9 @@ class ArucoLandingFragment : DJIFragment() {
         viewModel.autoAlignEnabled.observe(viewLifecycleOwner) { enabled ->
             autoAlignButton.text = if (enabled) "Aligning..." else "Auto Align"
             guidanceText.setBackgroundColor(if (enabled) Color.argb(190, 80, 0, 0) else Color.argb(170, 0, 0, 0))
+        }
+        viewModel.autoLandState.observe(viewLifecycleOwner) { state ->
+            autoLandButton.text = if (state == ArucoLandingVM.AutoLandState.IDLE) "Auto Land" else state.name
         }
         viewModel.guidance.observe(viewLifecycleOwner) { guidance ->
             guidanceText.text = guidance.instruction

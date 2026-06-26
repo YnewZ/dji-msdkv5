@@ -95,6 +95,13 @@
                     android:text="Auto Align" />
 
                 <Button
+                    android:id="@+id/btn_auto_land"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="Auto Land" />
+
+                <Button
                     android:id="@+id/btn_stop_detection"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

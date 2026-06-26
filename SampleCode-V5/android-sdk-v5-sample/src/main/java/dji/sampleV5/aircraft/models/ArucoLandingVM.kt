@@ -3,6 +3,7 @@ package dji.sampleV5.aircraft.models
 import android.view.Surface
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import dji.sdk.keyvalue.key.FlightControllerKey
 import dji.sampleV5.aircraft.aruco.ArucoAlignController
 import dji.sampleV5.aircraft.aruco.ArucoDetection
 import dji.sampleV5.aircraft.aruco.ArucoDetector
@@ -21,6 +22,8 @@ import dji.v5.common.callback.CommonCallbacks
 import dji.v5.common.error.IDJIError
 import dji.v5.et.action
 import dji.v5.et.create
+import dji.v5.et.listen
+import dji.v5.manager.KeyManager
 import dji.v5.manager.aircraft.virtualstick.VirtualStickManager
 import dji.v5.manager.datacenter.MediaDataCenter
 import dji.v5.manager.interfaces.ICameraStreamManager
@@ -33,15 +36,24 @@ import java.util.concurrent.TimeUnit
 
 class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
 
+    enum class AutoLandState {
+        IDLE,
+        ALIGN_ONLY,
+        DESCENDING,
+        FINAL_AUTO_LANDING
+    }
+
     private val detector = ArucoDetector(targetMarkerId = 1)
     private val guidanceController = ArucoGuidanceController()
     private val alignController = ArucoAlignController()
+    private val visualControlLock = Any()
     private val _availableCameraListData = MutableLiveData<List<ComponentIndexType>>(emptyList())
     private val _selectedCamera = MutableLiveData(ComponentIndexType.UNKNOWN)
     private val _detection = MutableLiveData<ArucoDetection>()
     private val _guidance = MutableLiveData(guidanceController.calculate(null))
     private val _status = MutableLiveData("Idle. Select Start Detection after video appears.")
     private val _autoAlignEnabled = MutableLiveData(false)
+    private val _autoLandState = MutableLiveData(AutoLandState.IDLE)
 
     private var frameListener: CameraFrameListener? = null
     private var isDetecting = false
@@ -50,12 +62,19 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     @Volatile private var latestDetection: ArucoDetection? = null
     @Volatile private var lastDetectionTime = 0L
     @Volatile private var autoAlignRunning = false
+    @Volatile private var autoLandRunning = false
     @Volatile private var virtualStickEnabled = false
+    @Volatile private var currentAutoLandState = AutoLandState.IDLE
+    @Volatile private var alignedSinceTime = 0L
+    @Volatile private var latestAltitude = Double.NaN
     private var alignExecutor: ScheduledExecutorService? = null
     private var surface: Surface? = null
 
     init {
         MediaDataCenter.getInstance().cameraStreamManager.addAvailableCameraUpdatedListener(this)
+        FlightControllerKey.KeyAltitude.create().listen(this) { altitude ->
+            altitude?.let { latestAltitude = it }
+        }
     }
 
     fun putCameraStreamSurface(surface: Surface, width: Int, height: Int) {
@@ -81,8 +100,8 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
 
     fun selectCamera(cameraIndex: ComponentIndexType) {
         if (_selectedCamera.value == cameraIndex) return
-        if (autoAlignRunning || virtualStickEnabled) {
-            stopAutoAlign()
+        if (autoAlignRunning || autoLandRunning || virtualStickEnabled) {
+            stopVisualControl()
         }
         stopDetection()
         _selectedCamera.postValue(cameraIndex)
@@ -98,14 +117,14 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
         _status.postValue("Selected camera: ${cameraIndex.name}")
     }
 
-    fun startDetection() {
+    fun startDetection(): Boolean {
         lookDownGimbal()
         val cameraIndex = selectedCamera.value ?: ComponentIndexType.UNKNOWN
         if (cameraIndex == ComponentIndexType.UNKNOWN) {
             _status.postValue("No camera stream is available yet.")
-            return
+            return false
         }
-        if (isDetecting) return
+        if (isDetecting) return true
         isDetecting = true
         val listener = CameraFrameListener { frameData, offset, length, width, height, format ->
             if (!isDetecting || format != ICameraStreamManager.FrameFormat.NV21) return@CameraFrameListener
@@ -144,16 +163,18 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
             listener
         )
         _status.postValue("Detection started on ${cameraIndex.name}. No flight control command is sent.")
+        return true
     }
 
     fun startAutoAlign() {
-        if (autoAlignRunning) return
-        startDetection()
+        if (autoAlignRunning || autoLandRunning) return
+        if (!startDetection()) return
         _status.postValue("Requesting Virtual Stick control. Make sure RC mode is Normal/P mode, not Sport/Cine/Tripod.")
         VirtualStickManager.getInstance().enableVirtualStick(object : CommonCallbacks.CompletionCallback {
             override fun onSuccess() {
                 virtualStickEnabled = true
                 autoAlignRunning = true
+                setAutoLandState(AutoLandState.ALIGN_ONLY)
                 VirtualStickManager.getInstance().setVirtualStickAdvancedModeEnabled(true)
                 _autoAlignEnabled.postValue(true)
                 _status.postValue("Auto align enabled. Horizontal control only; descent is disabled.")
@@ -163,6 +184,36 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
             override fun onFailure(error: IDJIError) {
                 autoAlignRunning = false
                 virtualStickEnabled = false
+                setAutoLandState(AutoLandState.IDLE)
+                _autoAlignEnabled.postValue(false)
+                _status.postValue("Enable virtual stick failed: $error\n请确认遥控器档位在 Normal/P 模式，不能是 Sport/Cine/Tripod；并确认飞机已起飞且未靠近限飞区/限远边界。")
+            }
+        })
+    }
+
+    fun startAutoLand() {
+        if (autoAlignRunning || autoLandRunning) return
+        if (!startDetection()) return
+        alignedSinceTime = 0L
+        _status.postValue("Requesting Virtual Stick control for conservative Auto Land.")
+        VirtualStickManager.getInstance().enableVirtualStick(object : CommonCallbacks.CompletionCallback {
+            override fun onSuccess() {
+                virtualStickEnabled = true
+                autoAlignRunning = true
+                autoLandRunning = true
+                setAutoLandState(AutoLandState.ALIGN_ONLY)
+                VirtualStickManager.getInstance().setVirtualStickAdvancedModeEnabled(true)
+                _autoAlignEnabled.postValue(true)
+                _status.postValue("Auto land enabled. Aligning before descent.")
+                startAlignLoop()
+            }
+
+            override fun onFailure(error: IDJIError) {
+                autoAlignRunning = false
+                autoLandRunning = false
+                virtualStickEnabled = false
+                alignedSinceTime = 0L
+                setAutoLandState(AutoLandState.IDLE)
                 _autoAlignEnabled.postValue(false)
                 _status.postValue("Enable virtual stick failed: $error\n请确认遥控器档位在 Normal/P 模式，不能是 Sport/Cine/Tripod；并确认飞机已起飞且未靠近限飞区/限远边界。")
             }
@@ -170,15 +221,33 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     }
 
     fun stopAutoAlign() {
-        val shouldDisableVirtualStick = virtualStickEnabled || autoAlignRunning || alignExecutor != null
+        stopVisualControl()
+    }
+
+    fun stopAll() {
+        stopVisualControl()
+        stopDetection()
+    }
+
+    private fun stopVisualControl() {
+        val shouldDisableVirtualStick = virtualStickEnabled || autoAlignRunning || autoLandRunning || alignExecutor != null
         if (!shouldDisableVirtualStick) {
             _autoAlignEnabled.postValue(false)
+            autoAlignRunning = false
+            autoLandRunning = false
+            alignedSinceTime = 0L
+            setAutoLandState(AutoLandState.IDLE)
             return
         }
-        autoAlignRunning = false
-        _autoAlignEnabled.postValue(false)
-        alignExecutor?.shutdownNow()
-        alignExecutor = null
+        synchronized(visualControlLock) {
+            autoAlignRunning = false
+            autoLandRunning = false
+            alignedSinceTime = 0L
+            setAutoLandState(AutoLandState.IDLE)
+            _autoAlignEnabled.postValue(false)
+            alignExecutor?.shutdownNow()
+            alignExecutor = null
+        }
         if (virtualStickEnabled) {
             sendVirtualStickParam(0.0, 0.0, 0.0, 0.0)
             VirtualStickManager.getInstance().setVirtualStickAdvancedModeEnabled(false)
@@ -186,12 +255,12 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
         VirtualStickManager.getInstance().disableVirtualStick(object : CommonCallbacks.CompletionCallback {
             override fun onSuccess() {
                 virtualStickEnabled = false
-                _status.postValue("Auto align stopped. Virtual stick disabled.")
+                _status.postValue("Visual control stopped. Virtual stick disabled.")
             }
 
             override fun onFailure(error: IDJIError) {
                 virtualStickEnabled = false
-                _status.postValue("Auto align stopped, but disable virtual stick failed: $error")
+                _status.postValue("Visual control stopped, but disable virtual stick failed: $error")
             }
         })
     }
@@ -201,18 +270,108 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
         alignExecutor = Executors.newSingleThreadScheduledExecutor()
         alignExecutor?.scheduleAtFixedRate({
             if (!autoAlignRunning || !virtualStickEnabled) return@scheduleAtFixedRate
+            if (!autoLandRunning && currentAutoLandState != AutoLandState.ALIGN_ONLY) {
+                setAutoLandState(AutoLandState.ALIGN_ONLY)
+            }
             val markerFresh = System.currentTimeMillis() - lastDetectionTime < 900L
             if (!markerFresh) {
+                alignedSinceTime = 0L
                 sendVirtualStickParam(0.0, 0.0, 0.0, 0.0)
-                _status.postValue("Auto align paused: marker lost. Hovering.")
+                if (autoLandRunning) setAutoLandState(AutoLandState.ALIGN_ONLY)
+                _status.postValue("${currentAutoLandState.name}: marker lost. Hovering. alt=${formatAltitude()}")
                 return@scheduleAtFixedRate
             }
             val command = alignController.calculate(latestDetection)
-            sendVirtualStickParam(command.pitchVelocity, command.rollVelocity, command.verticalVelocity, command.yawRate)
+            val verticalVelocity = if (autoLandRunning) updateAutoLandDescent(command) else 0.0
+            if (currentAutoLandState == AutoLandState.FINAL_AUTO_LANDING) return@scheduleAtFixedRate
+            sendVirtualStickParam(command.pitchVelocity, command.rollVelocity, verticalVelocity, command.yawRate)
             _status.postValue(
-                "Auto align: ${command.reason}, pitch=${"%.2f".format(command.pitchVelocity)}, roll=${"%.2f".format(command.rollVelocity)}"
+                "${currentAutoLandState.name}: ${command.reason}, pitch=${"%.2f".format(command.pitchVelocity)}, roll=${"%.2f".format(command.rollVelocity)}, vertical=${"%.2f".format(verticalVelocity)}, alt=${formatAltitude()}"
             )
         }, 0L, 100L, TimeUnit.MILLISECONDS)
+    }
+
+    private fun updateAutoLandDescent(command: dji.sampleV5.aircraft.aruco.ArucoAlignCommand): Double {
+        if (latestAltitude.isFinite() && latestAltitude <= FINAL_AUTO_LANDING_HEIGHT_M) {
+            enterFinalAutoLanding()
+            return 0.0
+        }
+
+        val now = System.currentTimeMillis()
+        if (!command.aligned) {
+            alignedSinceTime = 0L
+            setAutoLandState(AutoLandState.ALIGN_ONLY)
+            return 0.0
+        }
+
+        if (alignedSinceTime == 0L) {
+            alignedSinceTime = now
+            setAutoLandState(AutoLandState.ALIGN_ONLY)
+            return 0.0
+        }
+
+        if (now - alignedSinceTime < ALIGN_STABLE_TIME_MS) {
+            setAutoLandState(AutoLandState.ALIGN_ONLY)
+            return 0.0
+        }
+
+        setAutoLandState(AutoLandState.DESCENDING)
+        return DESCENT_VELOCITY_MPS
+    }
+
+    private fun enterFinalAutoLanding() {
+        synchronized(visualControlLock) {
+            if (!autoLandRunning || currentAutoLandState == AutoLandState.FINAL_AUTO_LANDING) return
+            setAutoLandState(AutoLandState.FINAL_AUTO_LANDING)
+            autoLandRunning = false
+            autoAlignRunning = false
+            alignedSinceTime = 0L
+            _autoAlignEnabled.postValue(false)
+            alignExecutor?.shutdown()
+            alignExecutor = null
+        }
+        sendVirtualStickParam(0.0, 0.0, 0.0, 0.0)
+        stopDetection()
+        if (virtualStickEnabled) {
+            VirtualStickManager.getInstance().setVirtualStickAdvancedModeEnabled(false)
+            VirtualStickManager.getInstance().disableVirtualStick(object : CommonCallbacks.CompletionCallback {
+                override fun onSuccess() {
+                    virtualStickEnabled = false
+                    startDjiAutoLanding()
+                }
+
+                override fun onFailure(error: IDJIError) {
+                    virtualStickEnabled = false
+                    _status.postValue("FINAL_AUTO_LANDING: disable virtual stick failed: $error")
+                    startDjiAutoLanding()
+                }
+            })
+        } else {
+            startDjiAutoLanding()
+        }
+    }
+
+    private fun startDjiAutoLanding() {
+        FlightControllerKey.KeyStartAutoLanding.create().action(
+            { _: EmptyMsg? ->
+                _status.postValue("FINAL_AUTO_LANDING: DJI auto landing started.")
+            },
+            { error: IDJIError ->
+                _status.postValue("FINAL_AUTO_LANDING: DJI auto landing failed: $error")
+                virtualStickEnabled = false
+                setAutoLandState(AutoLandState.IDLE)
+            }
+        )
+    }
+
+    private fun setAutoLandState(state: AutoLandState) {
+        if (currentAutoLandState == state) return
+        currentAutoLandState = state
+        _autoLandState.postValue(state)
+    }
+
+    private fun formatAltitude(): String {
+        return if (latestAltitude.isFinite()) "%.2fm".format(latestAltitude) else "unknown"
     }
 
     private fun sendVirtualStickParam(pitch: Double, roll: Double, vertical: Double, yaw: Double) {
@@ -267,8 +426,8 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     }
 
     override fun onCleared() {
-        stopAutoAlign()
-        stopDetection()
+        stopAll()
+        KeyManager.getInstance().cancelListen(this)
         MediaDataCenter.getInstance().cameraStreamManager.removeAvailableCameraUpdatedListener(this)
         super.onCleared()
     }
@@ -288,6 +447,15 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     val autoAlignEnabled: LiveData<Boolean>
         get() = _autoAlignEnabled
 
+    val autoLandState: LiveData<AutoLandState>
+        get() = _autoLandState
+
     val status: LiveData<String>
         get() = _status
+
+    companion object {
+        private const val ALIGN_STABLE_TIME_MS = 1200L
+        private const val DESCENT_VELOCITY_MPS = -0.08
+        private const val FINAL_AUTO_LANDING_HEIGHT_M = 0.6
+    }
 }
