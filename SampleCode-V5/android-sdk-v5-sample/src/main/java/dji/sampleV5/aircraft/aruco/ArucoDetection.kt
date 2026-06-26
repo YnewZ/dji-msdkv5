@@ -9,6 +9,8 @@ data class ArucoDetection(
     val centerY: Float = 0f,
     val normalizedErrorX: Float = 0f,
     val normalizedErrorY: Float = 0f,
+    val rotationDegrees: Float = 0f,
+    val confidence: Float = 0f,
     val corners: List<ArucoPoint> = emptyList(),
     val timestamp: Long = System.currentTimeMillis()
 ) {

@@ -1,6 +1,7 @@
 package dji.sampleV5.aircraft.aruco
 
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
 
@@ -12,7 +13,9 @@ class ArucoDetector(
         private const val GRID_SIZE = 7
         private const val INNER_GRID_SIZE = 5
         private const val MIN_QUAD_AREA_RATIO = 0.0025f
-        private const val MAX_CANDIDATES = 24
+        private const val MAX_CANDIDATES = 36
+        private const val MAX_ACCEPTED_BIT_ERRORS = 2
+        private const val RAD_TO_DEG = 57.29578f
 
         private val MARKER_ID_1_5X5_50 = arrayOf(
             intArrayOf(1, 1, 1, 1, 1, 1, 1),
@@ -42,9 +45,7 @@ class ArucoDetector(
 
         for (component in candidates) {
             val detection = decodeCandidate(frameData, offset, width, height, component, threshold)
-            if (detection != null) {
-                return detection
-            }
+            if (detection != null) return detection
         }
         return ArucoDetection.notFound(width, height)
     }
@@ -160,8 +161,8 @@ class ArucoDetector(
         component: Component,
         threshold: Int
     ): ArucoDetection? {
-        val marginX = ((component.maxX - component.minX + 1) * 0.03f).toInt()
-        val marginY = ((component.maxY - component.minY + 1) * 0.03f).toInt()
+        val marginX = ((component.maxX - component.minX + 1) * 0.02f).toInt()
+        val marginY = ((component.maxY - component.minY + 1) * 0.02f).toInt()
         val left = (component.minX + marginX).coerceIn(0, width - 1)
         val top = (component.minY + marginY).coerceIn(0, height - 1)
         val right = (component.maxX - marginX).coerceIn(left + 1, width - 1)
@@ -170,29 +171,35 @@ class ArucoDetector(
         val boxHeight = bottom - top + 1
         if (boxWidth < 35 || boxHeight < 35) return null
 
-        val bits = Array(GRID_SIZE) { IntArray(GRID_SIZE) }
-        for (gy in 0 until GRID_SIZE) {
-            for (gx in 0 until GRID_SIZE) {
-                val sx0 = left + gx * boxWidth / GRID_SIZE
-                val sx1 = left + (gx + 1) * boxWidth / GRID_SIZE
-                val sy0 = top + gy * boxHeight / GRID_SIZE
-                val sy1 = top + (gy + 1) * boxHeight / GRID_SIZE
-                val mean = sampleCellMean(data, offset, width, sx0, sy0, sx1, sy1)
-                bits[gy][gx] = if (mean < threshold) 1 else 0
-            }
-        }
+        val rawCorners = arrayOf(
+            PointF(left.toFloat(), top.toFloat()),
+            PointF(right.toFloat(), top.toFloat()),
+            PointF(right.toFloat(), bottom.toFloat()),
+            PointF(left.toFloat(), bottom.toFloat())
+        )
+        val refinedCorners = refineCorners(data, offset, width, height, rawCorners, threshold)
+        val bits = sampleMarkerBits(data, offset, width, height, refinedCorners, threshold)
 
         var bestErrors = Int.MAX_VALUE
+        var bestRotation = 0
         for (rotation in 0 until 4) {
             val rotated = rotate(bits, rotation)
             if (!hasDarkBorder(rotated)) continue
             val errors = countInnerErrors(rotated, MARKER_ID_1_5X5_50)
-            if (errors < bestErrors) bestErrors = errors
+            if (errors < bestErrors) {
+                bestErrors = errors
+                bestRotation = rotation
+            }
         }
 
-        if (bestErrors > 2) return null
-        val centerX = (left + right) / 2f
-        val centerY = (top + bottom) / 2f
+        if (bestErrors > MAX_ACCEPTED_BIT_ERRORS) return null
+        val orientedCorners = orientCorners(refinedCorners, bestRotation)
+        val centerX = orientedCorners.map { it.x }.average().toFloat()
+        val centerY = orientedCorners.map { it.y }.average().toFloat()
+        val topEdgeX = orientedCorners[1].x - orientedCorners[0].x
+        val topEdgeY = orientedCorners[1].y - orientedCorners[0].y
+        val rotationDegrees = atan2(topEdgeY, topEdgeX) * RAD_TO_DEG
+        val confidence = ((INNER_GRID_SIZE * INNER_GRID_SIZE - bestErrors).toFloat() / (INNER_GRID_SIZE * INNER_GRID_SIZE)).coerceIn(0f, 1f)
         return ArucoDetection(
             visible = true,
             markerId = targetMarkerId,
@@ -202,28 +209,88 @@ class ArucoDetector(
             centerY = centerY,
             normalizedErrorX = ((centerX - width / 2f) / (width / 2f)).coerceIn(-1f, 1f),
             normalizedErrorY = ((centerY - height / 2f) / (height / 2f)).coerceIn(-1f, 1f),
-            corners = listOf(
-                ArucoPoint(left.toFloat(), top.toFloat()),
-                ArucoPoint(right.toFloat(), top.toFloat()),
-                ArucoPoint(right.toFloat(), bottom.toFloat()),
-                ArucoPoint(left.toFloat(), bottom.toFloat())
-            )
+            rotationDegrees = normalizeDegrees(rotationDegrees),
+            confidence = confidence,
+            corners = orientedCorners.map { ArucoPoint(it.x, it.y) }
         )
     }
 
-    private fun sampleCellMean(data: ByteArray, offset: Int, width: Int, x0: Int, y0: Int, x1: Int, y1: Int): Int {
-        val insetX = max(1, (x1 - x0) / 5)
-        val insetY = max(1, (y1 - y0) / 5)
-        val startX = min(x1 - 1, x0 + insetX)
-        val endX = max(startX + 1, x1 - insetX)
-        val startY = min(y1 - 1, y0 + insetY)
-        val endY = max(startY + 1, y1 - insetY)
+    private fun sampleMarkerBits(
+        data: ByteArray,
+        offset: Int,
+        width: Int,
+        height: Int,
+        corners: Array<PointF>,
+        threshold: Int
+    ): Array<IntArray> {
+        val bits = Array(GRID_SIZE) { IntArray(GRID_SIZE) }
+        for (gy in 0 until GRID_SIZE) {
+            for (gx in 0 until GRID_SIZE) {
+                val mean = samplePerspectiveCellMean(data, offset, width, height, corners, gx, gy)
+                bits[gy][gx] = if (mean < threshold) 1 else 0
+            }
+        }
+        return bits
+    }
+
+    private fun refineCorners(
+        data: ByteArray,
+        offset: Int,
+        width: Int,
+        height: Int,
+        rawCorners: Array<PointF>,
+        threshold: Int
+    ): Array<PointF> {
+        val refined = Array(rawCorners.size) { index -> rawCorners[index] }
+        val searchRadius = max(3, min(width, height) / 160)
+        val darkThreshold = (threshold - 4).coerceAtLeast(35)
+        for (i in rawCorners.indices) {
+            val corner = rawCorners[i]
+            val x0 = (corner.x.toInt() - searchRadius).coerceIn(0, width - 1)
+            val x1 = (corner.x.toInt() + searchRadius).coerceIn(0, width - 1)
+            val y0 = (corner.y.toInt() - searchRadius).coerceIn(0, height - 1)
+            val y1 = (corner.y.toInt() + searchRadius).coerceIn(0, height - 1)
+            var sumX = 0f
+            var sumY = 0f
+            var count = 0
+            for (y in y0..y1) {
+                val row = y * width
+                for (x in x0..x1) {
+                    val luminance = data[offset + row + x].toInt() and 0xFF
+                    if (luminance <= darkThreshold) {
+                        sumX += x.toFloat()
+                        sumY += y.toFloat()
+                        count++
+                    }
+                }
+            }
+            if (count > 0) {
+                refined[i] = PointF(sumX / count, sumY / count)
+            }
+        }
+        return refined
+    }
+
+    private fun samplePerspectiveCellMean(
+        data: ByteArray,
+        offset: Int,
+        width: Int,
+        height: Int,
+        corners: Array<PointF>,
+        gx: Int,
+        gy: Int
+    ): Int {
         var sum = 0L
         var count = 0
-        for (y in startY until endY) {
-            val row = y * width
-            for (x in startX until endX) {
-                sum += data[offset + row + x].toInt() and 0xFF
+        val samples = floatArrayOf(0.35f, 0.5f, 0.65f)
+        for (sy in samples) {
+            for (sx in samples) {
+                val u = (gx + sx) / GRID_SIZE.toFloat()
+                val v = (gy + sy) / GRID_SIZE.toFloat()
+                val point = interpolate(corners, u, v)
+                val x = point.x.toInt().coerceIn(0, width - 1)
+                val y = point.y.toInt().coerceIn(0, height - 1)
+                sum += data[offset + y * width + x].toInt() and 0xFF
                 count++
             }
         }
@@ -263,6 +330,33 @@ class ArucoDetector(
         }
         return result
     }
+
+    private fun orientCorners(corners: Array<PointF>, rotation: Int): Array<PointF> {
+        return Array(corners.size) { index -> corners[(index + rotation) % corners.size] }
+    }
+
+    private fun interpolate(corners: Array<PointF>, u: Float, v: Float): PointF {
+        val topX = corners[0].x + (corners[1].x - corners[0].x) * u
+        val topY = corners[0].y + (corners[1].y - corners[0].y) * u
+        val bottomX = corners[3].x + (corners[2].x - corners[3].x) * u
+        val bottomY = corners[3].y + (corners[2].y - corners[3].y) * u
+        return PointF(
+            topX + (bottomX - topX) * v,
+            topY + (bottomY - topY) * v
+        )
+    }
+
+    private fun normalizeDegrees(degrees: Float): Float {
+        var value = degrees
+        while (value > 180f) value -= 360f
+        while (value < -180f) value += 360f
+        return value
+    }
+
+    private data class PointF(
+        val x: Float,
+        val y: Float
+    )
 
     private data class Component(
         val minX: Int,

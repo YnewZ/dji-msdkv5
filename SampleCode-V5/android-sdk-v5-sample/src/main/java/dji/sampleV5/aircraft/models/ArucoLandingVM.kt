@@ -144,7 +144,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
                     _guidance.postValue(guidanceController.calculate(result))
                     if (result.visible) {
                         _status.postValue(
-                            "Detected ID ${result.markerId}: errX=${"%.3f".format(result.normalizedErrorX)}, errY=${"%.3f".format(result.normalizedErrorY)}"
+                            "Detected ID ${result.markerId}: errX=${"%.3f".format(result.normalizedErrorX)}, errY=${"%.3f".format(result.normalizedErrorY)}, rot=${"%.1f".format(result.rotationDegrees)}, conf=${"%.2f".format(result.confidence)}"
                         )
                     } else {
                         _status.postValue("Detecting... ArUco ID 1 not found")

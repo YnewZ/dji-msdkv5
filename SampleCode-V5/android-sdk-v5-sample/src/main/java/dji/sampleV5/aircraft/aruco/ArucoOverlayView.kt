@@ -69,7 +69,7 @@ class ArucoOverlayView @JvmOverloads constructor(
         canvas.drawCircle(markerX, markerY, 16f, markerPaint)
         canvas.drawLine(width / 2f, height / 2f, markerX, markerY, markerPaint)
         canvas.drawText(
-            "ID ${current.markerId}  errX=${"%.2f".format(current.normalizedErrorX)}  errY=${"%.2f".format(current.normalizedErrorY)}",
+            "ID ${current.markerId}  errX=${"%.2f".format(current.normalizedErrorX)}  errY=${"%.2f".format(current.normalizedErrorY)}  rot=${"%.0f".format(current.rotationDegrees)}  conf=${"%.2f".format(current.confidence)}",
             24f,
             48f,
             textPaint
