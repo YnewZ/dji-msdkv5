@@ -32,6 +32,9 @@
     <string name="item_multi_camera_stream_title">多路视频解码 (CameraStreamManager - 新版)</string>
     <string name="item_multi_camera_stream_description">演示如何使用多路图传和多路解码模块</string>
 
+    <string name="item_aruco_landing_title">ArUco 降落识别</string>
+    <string name="item_aruco_landing_description">从大疆相机帧检测 ArUco ID 1。当前版本不发送飞控指令。</string>
+
     <string name="item_waypoint_title">航点飞行</string>
     <string name="item_waypoint_description">演示如何使用航点飞行功能</string>
 

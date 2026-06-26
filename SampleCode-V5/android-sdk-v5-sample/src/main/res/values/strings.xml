@@ -19,7 +19,7 @@ More refer to the release notes." </string>
     <string name="release_note_loading">loading…</string>
 
     <string name="app_name_all">MSDK ALL</string>
-    <string name="app_name_aircraft">MSDK Aircraft</string>
+    <string name="app_name_aircraft">MSDKSample</string>
     <string name="app_name_handheld">MSDK Handheld</string>
 
     <string name="item_key_value_title">Key/Value</string>
@@ -30,6 +30,9 @@ More refer to the release notes." </string>
 
     <string name="item_multi_camera_stream_title">Multi-Video Decoding (CameraStreamManager - New)</string>
     <string name="item_multi_camera_stream_description">Demonstrate how to use the Multi-Video Decoding function</string>
+
+    <string name="item_aruco_landing_title">Aruco Landing Detection</string>
+    <string name="item_aruco_landing_description">Detect ArUco ID 1 from DJI camera frames. Flight control is disabled.</string>
 
     <string name="item_waypoint_title">Waypoint</string>
     <string name="item_waypoint_description">Demonstrate how to use the waypoint flight function</string>
