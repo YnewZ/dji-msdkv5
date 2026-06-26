@@ -6,9 +6,9 @@ import androidx.lifecycle.MutableLiveData
 import dji.sdk.keyvalue.key.FlightControllerKey
 import dji.sampleV5.aircraft.aruco.ArucoAlignController
 import dji.sampleV5.aircraft.aruco.ArucoDetection
-import dji.sampleV5.aircraft.aruco.ArucoDetector
 import dji.sampleV5.aircraft.aruco.ArucoGuidance
 import dji.sampleV5.aircraft.aruco.ArucoGuidanceController
+import dji.sampleV5.aircraft.aruco.OpenCvArucoDetector
 import dji.sdk.keyvalue.key.GimbalKey
 import dji.sdk.keyvalue.value.common.EmptyMsg
 import dji.sdk.keyvalue.value.common.ComponentIndexType
@@ -43,7 +43,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
         FINAL_AUTO_LANDING
     }
 
-    private val detector = ArucoDetector(targetMarkerId = 1)
+    private val detector = OpenCvArucoDetector(targetMarkerId = 1)
     private val guidanceController = ArucoGuidanceController()
     private val alignController = ArucoAlignController()
     private val visualControlLock = Any()
@@ -67,6 +67,8 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     @Volatile private var currentAutoLandState = AutoLandState.IDLE
     @Volatile private var alignedSinceTime = 0L
     @Volatile private var latestAltitude = Double.NaN
+    @Volatile private var landingConfirmationNeeded = false
+    @Volatile private var landingConfirmSent = false
     private var alignExecutor: ScheduledExecutorService? = null
     private var surface: Surface? = null
 
@@ -74,6 +76,12 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
         MediaDataCenter.getInstance().cameraStreamManager.addAvailableCameraUpdatedListener(this)
         FlightControllerKey.KeyAltitude.create().listen(this) { altitude ->
             altitude?.let { latestAltitude = it }
+        }
+        FlightControllerKey.KeyIsLandingConfirmationNeeded.create().listen(this) { needed ->
+            landingConfirmationNeeded = needed == true
+            if (landingConfirmationNeeded && currentAutoLandState == AutoLandState.FINAL_AUTO_LANDING) {
+                confirmFinalLandingIfNeeded()
+            }
         }
     }
 
@@ -195,6 +203,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
         if (autoAlignRunning || autoLandRunning) return
         if (!startDetection()) return
         alignedSinceTime = 0L
+        landingConfirmSent = false
         _status.postValue("Requesting Virtual Stick control for conservative Auto Land.")
         VirtualStickManager.getInstance().enableVirtualStick(object : CommonCallbacks.CompletionCallback {
             override fun onSuccess() {
@@ -213,6 +222,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
                 autoLandRunning = false
                 virtualStickEnabled = false
                 alignedSinceTime = 0L
+                landingConfirmSent = false
                 setAutoLandState(AutoLandState.IDLE)
                 _autoAlignEnabled.postValue(false)
                 _status.postValue("Enable virtual stick failed: $error\n请确认遥控器档位在 Normal/P 模式，不能是 Sport/Cine/Tripod；并确认飞机已起飞且未靠近限飞区/限远边界。")
@@ -236,6 +246,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
             autoAlignRunning = false
             autoLandRunning = false
             alignedSinceTime = 0L
+            landingConfirmSent = false
             setAutoLandState(AutoLandState.IDLE)
             return
         }
@@ -243,6 +254,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
             autoAlignRunning = false
             autoLandRunning = false
             alignedSinceTime = 0L
+            landingConfirmSent = false
             setAutoLandState(AutoLandState.IDLE)
             _autoAlignEnabled.postValue(false)
             alignExecutor?.shutdownNow()
@@ -286,7 +298,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
             if (currentAutoLandState == AutoLandState.FINAL_AUTO_LANDING) return@scheduleAtFixedRate
             sendVirtualStickParam(command.pitchVelocity, command.rollVelocity, verticalVelocity, command.yawRate)
             _status.postValue(
-                "${currentAutoLandState.name}: ${command.reason}, pitch=${"%.2f".format(command.pitchVelocity)}, roll=${"%.2f".format(command.rollVelocity)}, vertical=${"%.2f".format(verticalVelocity)}, alt=${formatAltitude()}"
+                "${currentAutoLandState.name}: ${command.reason}, pitch=${"%.2f".format(command.pitchVelocity)}, roll=${"%.2f".format(command.rollVelocity)}, yaw=${"%.1f".format(command.yawRate)}deg/s, vertical=${"%.2f".format(verticalVelocity)}, alt=${formatAltitude()}"
             )
         }, 0L, 100L, TimeUnit.MILLISECONDS)
     }
@@ -326,6 +338,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
             autoLandRunning = false
             autoAlignRunning = false
             alignedSinceTime = 0L
+            landingConfirmSent = false
             _autoAlignEnabled.postValue(false)
             alignExecutor?.shutdown()
             alignExecutor = null
@@ -355,11 +368,26 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
         FlightControllerKey.KeyStartAutoLanding.create().action(
             { _: EmptyMsg? ->
                 _status.postValue("FINAL_AUTO_LANDING: DJI auto landing started.")
+                confirmFinalLandingIfNeeded()
             },
             { error: IDJIError ->
                 _status.postValue("FINAL_AUTO_LANDING: DJI auto landing failed: $error")
                 virtualStickEnabled = false
                 setAutoLandState(AutoLandState.IDLE)
+            }
+        )
+    }
+
+    private fun confirmFinalLandingIfNeeded() {
+        if (!landingConfirmationNeeded || landingConfirmSent) return
+        landingConfirmSent = true
+        FlightControllerKey.KeyConfirmLanding.create().action(
+            { _: EmptyMsg? ->
+                _status.postValue("FINAL_AUTO_LANDING: landing confirmation sent.")
+            },
+            { error: IDJIError ->
+                landingConfirmSent = false
+                _status.postValue("FINAL_AUTO_LANDING: landing confirmation failed: $error")
             }
         )
     }

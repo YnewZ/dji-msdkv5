@@ -23,6 +23,7 @@ ext {
     deps.cardview = 'androidx.cardview:cardview:1.0.0'//PopoverView中使用
     deps.material = 'com.google.android.material:material:1.0.0'//AvoidanceShortcutWidget使用
     deps.lynx = 'com.github.pedrovgs:lynx:1.1.0'// app显示logcat
+    deps.opencv = 'org.opencv:opencv:4.10.0'
 
     /*RTK设置页面使用-start*/
     deps.mikepenzCommunityMaterial = "com.mikepenz:community-material-typeface:3.5.95.1-kotlin@aar"

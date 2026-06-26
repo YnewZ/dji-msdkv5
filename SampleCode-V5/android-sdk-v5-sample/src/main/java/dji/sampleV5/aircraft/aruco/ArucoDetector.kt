@@ -7,7 +7,7 @@ import kotlin.math.min
 
 class ArucoDetector(
     private val targetMarkerId: Int = 1
-) {
+) : MarkerDetector {
 
     companion object {
         private const val GRID_SIZE = 7
@@ -28,7 +28,7 @@ class ArucoDetector(
         )
     }
 
-    fun detectNv21(frameData: ByteArray, offset: Int, length: Int, width: Int, height: Int): ArucoDetection {
+    override fun detectNv21(frameData: ByteArray, offset: Int, length: Int, width: Int, height: Int): ArucoDetection {
         if (targetMarkerId != 1 || width <= 0 || height <= 0 || length <= 0) {
             return ArucoDetection.notFound(width, height)
         }

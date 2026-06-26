@@ -128,6 +128,7 @@ dependencies {
     implementation deps.expandedit
     implementation deps.rx3Kt
     implementation deps.dom
+    implementation deps.opencv
     kapt deps.glidecompiler
     implementation deps.lynx
 }
