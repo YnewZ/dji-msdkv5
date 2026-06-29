@@ -483,7 +483,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
 
     companion object {
         private const val ALIGN_STABLE_TIME_MS = 1200L
-        private const val DESCENT_VELOCITY_MPS = -0.08
-        private const val FINAL_AUTO_LANDING_HEIGHT_M = 0.6
+        private const val DESCENT_VELOCITY_MPS = -0.12
+        private const val FINAL_AUTO_LANDING_HEIGHT_M = 0.25
     }
 }

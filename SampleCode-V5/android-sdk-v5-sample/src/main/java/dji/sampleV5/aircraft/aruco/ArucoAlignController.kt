@@ -14,14 +14,14 @@ data class ArucoAlignCommand(
 )
 
 class ArucoAlignController(
-    private val maxHorizontalVelocity: Double = 0.05,
-    private val minHorizontalVelocity: Double = 0.015,
-    private val kp: Double = 0.10,
+    private val maxHorizontalVelocity: Double = 0.10,
+    private val minHorizontalVelocity: Double = 0.025,
+    private val kp: Double = 0.18,
     private val alignThreshold: Float = 0.14f,
     private val deadBand: Float = 0.08f,
-    private val maxYawRateDegreesPerSecond: Double = 8.0,
-    private val minYawRateDegreesPerSecond: Double = 1.5,
-    private val yawKp: Double = 0.22,
+    private val maxYawRateDegreesPerSecond: Double = 15.0,
+    private val minYawRateDegreesPerSecond: Double = 3.0,
+    private val yawKp: Double = 0.35,
     private val yawAlignThresholdDegrees: Float = 8f,
     private val yawDeadBandDegrees: Float = 4f,
     private val targetYawDegrees: Float = 0f,
