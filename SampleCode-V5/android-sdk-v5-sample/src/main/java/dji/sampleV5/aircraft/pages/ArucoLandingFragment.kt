@@ -8,6 +8,9 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import android.widget.TextView
 import android.graphics.Color
 import androidx.fragment.app.viewModels
@@ -25,6 +28,8 @@ class ArucoLandingFragment : DJIFragment() {
     private lateinit var guidanceText: TextView
     private lateinit var autoAlignButton: Button
     private lateinit var autoLandButton: Button
+    private lateinit var profileSpinner: Spinner
+    private var profileSelectionReady = false
     private var surface: Surface? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -39,6 +44,8 @@ class ArucoLandingFragment : DJIFragment() {
         guidanceText = view.findViewById(R.id.tv_guidance)
         autoAlignButton = view.findViewById(R.id.btn_auto_align)
         autoLandButton = view.findViewById(R.id.btn_auto_land)
+        profileSpinner = view.findViewById(R.id.sp_profile)
+        initProfileSpinner()
         view.findViewById<Button>(R.id.btn_gimbal_down).setOnClickListener {
             viewModel.lookDownGimbal()
             ToastUtils.showToast("Sending gimbal look-down command.")
@@ -92,6 +99,12 @@ class ArucoLandingFragment : DJIFragment() {
         viewModel.autoLandState.observe(viewLifecycleOwner) { state ->
             autoLandButton.text = if (state == ArucoLandingVM.AutoLandState.IDLE) "Auto Land" else state.name
         }
+        viewModel.selectedProfile.observe(viewLifecycleOwner) { profile ->
+            val index = viewModel.profiles.indexOf(profile)
+            if (index >= 0 && profileSpinner.selectedItemPosition != index) {
+                profileSpinner.setSelection(index)
+            }
+        }
         viewModel.guidance.observe(viewLifecycleOwner) { guidance ->
             guidanceText.text = guidance.instruction
             guidanceText.setTextColor(
@@ -102,6 +115,25 @@ class ArucoLandingFragment : DJIFragment() {
                 }
             )
             statusText.text = guidance.detail
+        }
+    }
+
+    private fun initProfileSpinner() {
+        val profileNames = viewModel.profiles.map { it.displayName }
+        profileSpinner.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, profileNames).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        profileSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (!profileSelectionReady) {
+                    profileSelectionReady = true
+                    return
+                }
+                viewModel.selectProfile(viewModel.profiles[position])
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+            }
         }
     }
 

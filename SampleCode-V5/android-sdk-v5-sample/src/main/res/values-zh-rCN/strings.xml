@@ -35,6 +35,18 @@
     <string name="item_aruco_landing_title">ArUco 降落识别</string>
     <string name="item_aruco_landing_description">从大疆相机帧检测 ArUco ID 1。当前版本不发送飞控指令。</string>
 
+    <string name="item_custom_features_title">我的功能</string>
+    <string name="item_custom_features_description">进入个人增加的 ArUco 降落、UDP 控制等功能</string>
+    <string name="custom_feature_aruco_landing">ArUco 引导降落</string>
+    <string name="custom_feature_udp_control">UDP 控制</string>
+    <string name="item_udp_title">UDP 控制</string>
+    <string name="item_udp_description">接收 UDP 数据并转发到虚拟摇杆</string>
+    <string name="udp_server_not_started">未启动</string>
+    <string name="udp_virtual_stick_not_started">仅监听显示，虚拟摇杆未启动。</string>
+    <string name="udp_btn_start">启动飞控执行</string>
+    <string name="udp_btn_stop">停止飞控执行</string>
+    <string name="udp_protocol_description">页面打开后自动监听 UDP 9999 端口。数据包：24 字节，6 个小端序 float。映射：[0]=roll，[1]=pitch，[2]=垂直速度，[5]=yaw 角速度。启动飞控执行前只显示数据，不发送给无人机。App 不对数值限幅。</string>
+
     <string name="item_waypoint_title">航点飞行</string>
     <string name="item_waypoint_description">演示如何使用航点飞行功能</string>
 

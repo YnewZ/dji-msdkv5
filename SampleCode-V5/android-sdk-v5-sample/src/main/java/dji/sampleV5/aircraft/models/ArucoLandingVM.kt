@@ -8,6 +8,7 @@ import dji.sampleV5.aircraft.aruco.ArucoAlignController
 import dji.sampleV5.aircraft.aruco.ArucoDetection
 import dji.sampleV5.aircraft.aruco.ArucoGuidance
 import dji.sampleV5.aircraft.aruco.ArucoGuidanceController
+import dji.sampleV5.aircraft.aruco.ArucoLandingProfile
 import dji.sampleV5.aircraft.aruco.OpenCvArucoDetector
 import dji.sdk.keyvalue.key.GimbalKey
 import dji.sdk.keyvalue.value.common.EmptyMsg
@@ -54,6 +55,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     private val _status = MutableLiveData("Idle. Select Start Detection after video appears.")
     private val _autoAlignEnabled = MutableLiveData(false)
     private val _autoLandState = MutableLiveData(AutoLandState.IDLE)
+    private val _selectedProfile = MutableLiveData(ArucoLandingProfile.MAVIC_3E)
 
     private var frameListener: CameraFrameListener? = null
     private var isDetecting = false
@@ -71,6 +73,8 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     @Volatile private var landingConfirmSent = false
     private var alignExecutor: ScheduledExecutorService? = null
     private var surface: Surface? = null
+
+    val profiles: List<ArucoLandingProfile> = ArucoLandingProfile.ALL
 
     init {
         MediaDataCenter.getInstance().cameraStreamManager.addAvailableCameraUpdatedListener(this)
@@ -125,6 +129,16 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
         _status.postValue("Selected camera: ${cameraIndex.name}")
     }
 
+    fun selectProfile(profile: ArucoLandingProfile) {
+        if (autoAlignRunning || autoLandRunning || virtualStickEnabled) {
+            _status.postValue("Cannot switch ArUco profile while visual control is running. Press STOP first.")
+            return
+        }
+        alignController.updateProfile(profile)
+        _selectedProfile.postValue(profile)
+        _status.postValue("Selected ArUco profile: ${profile.displayName}")
+    }
+
     fun startDetection(): Boolean {
         lookDownGimbal()
         val cameraIndex = selectedCamera.value ?: ComponentIndexType.UNKNOWN
@@ -177,7 +191,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     fun startAutoAlign() {
         if (autoAlignRunning || autoLandRunning) return
         if (!startDetection()) return
-        _status.postValue("Requesting Virtual Stick control. Make sure RC mode is Normal/P mode, not Sport/Cine/Tripod.")
+        _status.postValue("Requesting Virtual Stick control with ${currentProfile().displayName}. Make sure RC mode is Normal/P mode, not Sport/Cine/Tripod.")
         VirtualStickManager.getInstance().enableVirtualStick(object : CommonCallbacks.CompletionCallback {
             override fun onSuccess() {
                 virtualStickEnabled = true
@@ -185,7 +199,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
                 setAutoLandState(AutoLandState.ALIGN_ONLY)
                 VirtualStickManager.getInstance().setVirtualStickAdvancedModeEnabled(true)
                 _autoAlignEnabled.postValue(true)
-                _status.postValue("Auto align enabled. Horizontal control only; descent is disabled.")
+                _status.postValue("Auto align enabled with ${currentProfile().displayName}. Horizontal control only; descent is disabled.")
                 startAlignLoop()
             }
 
@@ -204,7 +218,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
         if (!startDetection()) return
         alignedSinceTime = 0L
         landingConfirmSent = false
-        _status.postValue("Requesting Virtual Stick control for conservative Auto Land.")
+        _status.postValue("Requesting Virtual Stick control for Auto Land with ${currentProfile().displayName}.")
         VirtualStickManager.getInstance().enableVirtualStick(object : CommonCallbacks.CompletionCallback {
             override fun onSuccess() {
                 virtualStickEnabled = true
@@ -213,7 +227,7 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
                 setAutoLandState(AutoLandState.ALIGN_ONLY)
                 VirtualStickManager.getInstance().setVirtualStickAdvancedModeEnabled(true)
                 _autoAlignEnabled.postValue(true)
-                _status.postValue("Auto land enabled. Aligning before descent.")
+                _status.postValue("Auto land enabled with ${currentProfile().displayName}. Aligning before descent.")
                 startAlignLoop()
             }
 
@@ -304,7 +318,8 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     }
 
     private fun updateAutoLandDescent(command: dji.sampleV5.aircraft.aruco.ArucoAlignCommand): Double {
-        if (latestAltitude.isFinite() && latestAltitude <= FINAL_AUTO_LANDING_HEIGHT_M) {
+            val profile = currentProfile()
+            if (latestAltitude.isFinite() && latestAltitude <= profile.finalAutoLandingHeightM) {
             enterFinalAutoLanding()
             return 0.0
         }
@@ -322,13 +337,17 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
             return 0.0
         }
 
-        if (now - alignedSinceTime < ALIGN_STABLE_TIME_MS) {
+        if (now - alignedSinceTime < profile.alignStableTimeMs) {
             setAutoLandState(AutoLandState.ALIGN_ONLY)
             return 0.0
         }
 
         setAutoLandState(AutoLandState.DESCENDING)
-        return DESCENT_VELOCITY_MPS
+        return profile.descentVelocityMps
+    }
+
+    private fun currentProfile(): ArucoLandingProfile {
+        return _selectedProfile.value ?: ArucoLandingProfile.MAVIC_3E
     }
 
     private fun enterFinalAutoLanding() {
@@ -478,12 +497,12 @@ class ArucoLandingVM : DJIViewModel(), AvailableCameraUpdatedListener {
     val autoLandState: LiveData<AutoLandState>
         get() = _autoLandState
 
+    val selectedProfile: LiveData<ArucoLandingProfile>
+        get() = _selectedProfile
+
     val status: LiveData<String>
         get() = _status
 
     companion object {
-        private const val ALIGN_STABLE_TIME_MS = 1200L
-        private const val DESCENT_VELOCITY_MPS = -0.12
-        private const val FINAL_AUTO_LANDING_HEIGHT_M = 0.25
     }
 }

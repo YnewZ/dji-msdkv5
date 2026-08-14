@@ -34,6 +34,18 @@ More refer to the release notes." </string>
     <string name="item_aruco_landing_title">Aruco Landing Detection</string>
     <string name="item_aruco_landing_description">Detect ArUco ID 1 from DJI camera frames. Flight control is disabled.</string>
 
+    <string name="item_custom_features_title">Custom Features</string>
+    <string name="item_custom_features_description">Open personal features such as ArUco landing and UDP control</string>
+    <string name="custom_feature_aruco_landing">ArUco Guided Landing</string>
+    <string name="custom_feature_udp_control">UDP Control</string>
+    <string name="item_udp_title">UDP Control</string>
+    <string name="item_udp_description">Receive UDP packets and forward values to Virtual Stick</string>
+    <string name="udp_server_not_started">Not started</string>
+    <string name="udp_virtual_stick_not_started">Listening only. Virtual Stick not started.</string>
+    <string name="udp_btn_start">Start Flight Control</string>
+    <string name="udp_btn_stop">Stop Flight Control</string>
+    <string name="udp_protocol_description">The page listens on UDP port 9999 automatically. Packet: 24 bytes, six little-endian floats. Mapping: [0]=roll, [1]=pitch, [2]=vertical velocity, [5]=yaw angular velocity. Before flight control is started, packets are displayed only and are not sent to the aircraft. Values are not limited by the app.</string>
+
     <string name="item_waypoint_title">Waypoint</string>
     <string name="item_waypoint_description">Demonstrate how to use the waypoint flight function</string>
 

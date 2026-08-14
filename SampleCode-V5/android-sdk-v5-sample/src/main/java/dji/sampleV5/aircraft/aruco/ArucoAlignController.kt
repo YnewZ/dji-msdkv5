@@ -14,19 +14,18 @@ data class ArucoAlignCommand(
 )
 
 class ArucoAlignController(
-    private val maxHorizontalVelocity: Double = 0.10,
-    private val minHorizontalVelocity: Double = 0.025,
-    private val kp: Double = 0.18,
+    private var profile: ArucoLandingProfile = ArucoLandingProfile.MAVIC_3E,
     private val alignThreshold: Float = 0.14f,
     private val deadBand: Float = 0.08f,
-    private val maxYawRateDegreesPerSecond: Double = 15.0,
-    private val minYawRateDegreesPerSecond: Double = 3.0,
-    private val yawKp: Double = 0.35,
     private val yawAlignThresholdDegrees: Float = 8f,
     private val yawDeadBandDegrees: Float = 4f,
     private val targetYawDegrees: Float = 0f,
     private val yawDirectionSign: Double = 1.0
 ) {
+
+    fun updateProfile(profile: ArucoLandingProfile) {
+        this.profile = profile
+    }
 
     fun calculate(detection: ArucoDetection?): ArucoAlignCommand {
         if (detection == null || !detection.visible) {
@@ -78,15 +77,15 @@ class ArucoAlignController(
 
     private fun velocityFromError(error: Float): Double {
         if (abs(error) < deadBand) return 0.0
-        val raw = error * kp
-        val absVelocity = abs(raw).coerceIn(minHorizontalVelocity, maxHorizontalVelocity)
+        val raw = error * profile.kp
+        val absVelocity = abs(raw).coerceIn(profile.minHorizontalVelocity, profile.maxHorizontalVelocity)
         return if (raw >= 0) absVelocity else -absVelocity
     }
 
     private fun yawRateFromError(errorDegrees: Float): Double {
         if (abs(errorDegrees) < yawDeadBandDegrees) return 0.0
-        val raw = errorDegrees * yawKp * yawDirectionSign
-        val absYawRate = abs(raw).coerceIn(minYawRateDegreesPerSecond, maxYawRateDegreesPerSecond)
+        val raw = errorDegrees * profile.yawKp * yawDirectionSign
+        val absYawRate = abs(raw).coerceIn(profile.minYawRateDegreesPerSecond, profile.maxYawRateDegreesPerSecond)
         return if (raw >= 0) absYawRate else -absYawRate
     }
 
