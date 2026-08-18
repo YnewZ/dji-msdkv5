@@ -38,6 +38,16 @@ More refer to the release notes." </string>
     <string name="item_custom_features_description">Open personal features such as ArUco landing and UDP control</string>
     <string name="custom_feature_aruco_landing">ArUco Guided Landing</string>
     <string name="custom_feature_udp_control">UDP Control</string>
+    <string name="indoor_control_title">Indoor UAV Control</string>
+    <string name="indoor_control_subtitle">Custom control console for guided landing and external command flight.</string>
+    <string name="indoor_back_to_main">Back</string>
+    <string name="waypoint_capture_title">Mapping and Waypoint Capture</string>
+    <string name="waypoint_onboard_host">Onboard computer IP</string>
+    <string name="waypoint_onboard_port">TCP port</string>
+    <string name="waypoint_connect">Connect</string>
+    <string name="waypoint_disconnect">Disconnect</string>
+    <string name="waypoint_ping">Ping</string>
+    <string name="waypoint_capture_current">Capture Current Waypoint</string>
     <string name="item_udp_title">UDP Control</string>
     <string name="item_udp_description">Receive UDP packets and forward values to Virtual Stick</string>
     <string name="udp_server_not_started">Not started</string>

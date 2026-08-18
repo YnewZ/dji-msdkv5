@@ -9,8 +9,11 @@
         android:id="@+id/video_container"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toTopOf="@+id/control_panel"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="12dp"
+        android:background="@color/black"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintDimensionRatio="16:9"
+        app:layout_constraintEnd_toStartOf="@+id/control_panel"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
@@ -29,13 +32,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|center_horizontal"
-            android:layout_marginTop="18dp"
+            android:layout_marginTop="14dp"
             android:background="#AA000000"
             android:gravity="center"
             android:paddingStart="18dp"
-            android:paddingTop="10dp"
+            android:paddingTop="8dp"
             android:paddingEnd="18dp"
-            android:paddingBottom="10dp"
+            android:paddingBottom="8dp"
             android:text="SEARCH MARKER"
             android:textColor="@color/white"
             android:textSize="24sp"
@@ -43,99 +46,91 @@
 
     </FrameLayout>
 
-    <androidx.constraintlayout.widget.ConstraintLayout
+    <ScrollView
         android:id="@+id/control_panel"
-        android:layout_width="0dp"
-        android:layout_height="108dp"
+        android:layout_width="310dp"
+        android:layout_height="0dp"
         android:background="#CC111111"
-        android:padding="10dp"
+        android:fillViewport="true"
+        android:padding="14dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        app:layout_constraintTop_toTopOf="parent">
 
-        <TextView
-            android:id="@+id/tv_status"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="Aruco Landing: detection only"
-            android:textColor="@color/white"
-            android:textSize="14sp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            android:orientation="vertical">
 
-        <HorizontalScrollView
-            android:id="@+id/control_scroll"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_marginTop="8dp"
-            android:fillViewport="false"
-            android:scrollbars="none"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/tv_status">
-
-            <LinearLayout
-                android:layout_width="wrap_content"
+            <TextView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:text="ArUco 引导降落"
+                android:textColor="@color/white"
+                android:textSize="20sp"
+                android:textStyle="bold" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Profile"
-                    android:textColor="@color/white" />
+            <TextView
+                android:id="@+id/tv_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Aruco Landing: detection only"
+                android:textColor="@color/white"
+                android:textSize="14sp" />
 
-                <Spinner
-                    android:id="@+id/sp_profile"
-                    android:layout_width="150dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:background="#EEEEEE"
-                    android:popupBackground="#FFFFFF" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="Profile"
+                android:textColor="@color/white"
+                android:textSize="14sp" />
 
-                <Button
-                    android:id="@+id/btn_gimbal_down"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="Gimbal Down" />
+            <Spinner
+                android:id="@+id/sp_profile"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="#EEEEEE"
+                android:popupBackground="#FFFFFF" />
 
-                <Button
-                    android:id="@+id/btn_start_detection"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="Start Detection" />
+            <Button
+                android:id="@+id/btn_gimbal_down"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="Gimbal Down" />
 
-                <Button
-                    android:id="@+id/btn_auto_align"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="Auto Align" />
+            <Button
+                android:id="@+id/btn_start_detection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Start Detection" />
 
-                <Button
-                    android:id="@+id/btn_auto_land"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="Auto Land" />
+            <Button
+                android:id="@+id/btn_auto_align"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Auto Align" />
 
-                <Button
-                    android:id="@+id/btn_stop_detection"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="STOP" />
+            <Button
+                android:id="@+id/btn_auto_land"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Auto Land" />
 
-            </LinearLayout>
-        </HorizontalScrollView>
+            <Button
+                android:id="@+id/btn_stop_detection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="STOP" />
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+        </LinearLayout>
+    </ScrollView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

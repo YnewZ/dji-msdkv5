@@ -39,6 +39,16 @@
     <string name="item_custom_features_description">进入个人增加的 ArUco 降落、UDP 控制等功能</string>
     <string name="custom_feature_aruco_landing">ArUco 引导降落</string>
     <string name="custom_feature_udp_control">UDP 控制</string>
+    <string name="indoor_control_title">室内无人机飞控</string>
+    <string name="indoor_control_subtitle">自研飞控总控入口，集成视觉降落与外部指令控制。</string>
+    <string name="indoor_back_to_main">返回</string>
+    <string name="waypoint_capture_title">建模与航点采集</string>
+    <string name="waypoint_onboard_host">机载计算机 IP</string>
+    <string name="waypoint_onboard_port">TCP 端口</string>
+    <string name="waypoint_connect">建立通信</string>
+    <string name="waypoint_disconnect">断开通信</string>
+    <string name="waypoint_ping">测试通信</string>
+    <string name="waypoint_capture_current">采集当前航点</string>
     <string name="item_udp_title">UDP 控制</string>
     <string name="item_udp_description">接收 UDP 数据并转发到虚拟摇杆</string>
     <string name="udp_server_not_started">未启动</string>

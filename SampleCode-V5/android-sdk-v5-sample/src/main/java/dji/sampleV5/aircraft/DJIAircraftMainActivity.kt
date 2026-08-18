@@ -24,6 +24,8 @@ class DJIAircraftMainActivity : DJIMainActivity() {
 
         enableDefaultLayout(DefaultLayoutActivity::class.java)
         enableWidgetList(WidgetsActivity::class.java)
+        enableIndoorFlightControl(IndoorFlightControlActivity::class.java)
+        openIndoorFlightControlOnce(IndoorFlightControlActivity::class.java)
     }
 
     override fun prepareTestingToolsActivity() {

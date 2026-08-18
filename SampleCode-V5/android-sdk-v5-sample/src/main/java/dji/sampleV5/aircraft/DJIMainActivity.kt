@@ -60,6 +60,7 @@ abstract class DJIMainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val handler: Handler = Handler(Looper.getMainLooper())
     private val disposable = CompositeDisposable()
+    private var indoorFlightControlAutoOpened = false
 
     abstract fun prepareUxActivity()
 
@@ -184,6 +185,18 @@ abstract class DJIMainActivity : AppCompatActivity() {
 
     fun <T> enableTestingTools(cl: Class<T>) {
         enableShowCaseButton(binding.testingToolButton, cl)
+    }
+
+    fun <T> enableIndoorFlightControl(cl: Class<T>) {
+        enableShowCaseButton(binding.indoorFlightControlButton, cl)
+    }
+
+    fun <T> openIndoorFlightControlOnce(cl: Class<T>) {
+        if (indoorFlightControlAutoOpened) return
+        indoorFlightControlAutoOpened = true
+        Intent(this, cl).also {
+            startActivity(it)
+        }
     }
 
     private fun <T> enableShowCaseButton(view: View, cl: Class<T>) {
